@@ -1,0 +1,419 @@
+---
+title: "Krebs"
+subtitle: "Auswertungen nach regionalen und demografischen Merkmalen"
+author: "Gerald Gartner"
+date: "01-2019"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+    toc_float: 
+      collapsed: false
+      smooth_scroll: false
+---
+
+
+```{r, echo=FALSE}
+# CONFIG
+user_name <- "qvvdata" # your Git username (only needed if
+# you want to deploy to GH pages)
+project_name <- "2019-krebs" # adapt!
+package_date <- "2019-01-01" # date of the CRAN snapshot that
+# the checkpoint package uses
+```
+
+## Notes
+
+This report was generated on `r Sys.time()`.
+
+...
+
+### R-Script & data
+
+The preprocessing and analysis of the data was conducted in the [R project for statistical computing](https://www.r-project.org/). The RMarkdown script used to generate this document and all the resulting data can be downloaded [under this link](http://`r user_name`.github.io/`r project_name`/rscript.zip). Through executing `main.Rmd`, the herein described process can be reproduced and this document can be generated. In the course of this, data from the folder `ìnput` will be processed and results will be written to `output`. 
+The code for the herein described process can also be freely downloaded from [https://github.com/`r user_name`/`r project_name`](https://github.com/`r user_name`/`r project_name`). 
+
+## Preparations
+
+```{r, echo=FALSE}
+detach_all_packages <- function() {
+  basic_packages_blank <-  c("stats",
+                             "graphics",
+                             "grDevices",
+                             "utils",
+                             "datasets",
+                             "methods",
+                             "base")
+  basic_packages <- paste("package:", basic_packages_blank, sep = "")
+
+  package_list <- search()[
+    ifelse(unlist(gregexpr("package:", search())) == 1, TRUE, FALSE)]
+
+  package_list <- setdiff(package_list, basic_packages)
+
+  if (length(package_list) > 0)  for (package in package_list) {
+    detach(package, character.only = TRUE, unload = TRUE)
+    print(paste("package ", package, " detached", sep = ""))
+  }
+}
+
+detach_all_packages()
+
+# this allows multiple persons to use the same RMarkdown
+# without adjusting the working directory by themselves all the time
+source("scripts/csf.R")
+path_to_wd <- csf() # if this - for some reason - does not work, 
+# replace with a hardcoded path, like so: "~/projects/rddj-template/analysis/"
+if ( is.null(path_to_wd) | !dir.exists(path_to_wd)) {
+  print("WARNING: No working directory specified for current user")
+} else {
+  setwd(path_to_wd)
+}
+```
+
+
+### Define packages
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# from https://mran.revolutionanalytics.com/web/packages/checkpoint/vignettes/using-checkpoint-with-knitr.html
+# if you don't need a package, remove it from here (commenting is probably not sufficient)
+# tidyverse: see https://blog.rstudio.org/2016/09/15/tidyverse-1-0-0/
+cat("
+library(tidyverse)
+library(magrittr) # pipes
+library(readxl) # excel
+library(jsonlite) # json
+library(lintr) # code linting
+library(xlsx) #Excel
+library(googlesheets) # googlesheets (replace with googlesheets4 asap)",
+file = "manifest.R")
+```
+
+### Install packages
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# if checkpoint is not yet installed, install it (for people using this
+# system for the first time)
+if (!require(checkpoint)) {
+  if (!require(devtools)) {
+    install.packages("devtools", repos = "http://cran.us.r-project.org")
+    require(devtools)
+  }
+  devtools::install_github("checkpoint",
+                           username = "RevolutionAnalytics",
+                           ref = "v0.3.2", # could be adapted later,
+                           # as of now (beginning of July 2017
+                           # this is the current release on CRAN)
+                           repos = "http://cran.us.r-project.org")
+  require(checkpoint)
+}
+# nolint start
+if (!dir.exists("~/.checkpoint")) {
+  dir.create("~/.checkpoint")
+}
+# nolint end
+# install packages for the specified CRAN snapshot date
+checkpoint(snapshotDate = package_date,
+           project = path_to_wd,
+           verbose = T,
+           scanForPackages = T,
+           use.knitr = F)
+rm(package_date)
+```
+
+
+### Load packages
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+source("manifest.R")
+unlink("manifest.R")
+sessionInfo()
+```
+
+### Load additional scripts
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# if you want to outsource logic to other script files, see README for 
+# further information
+knitr::read_chunk("scripts/theme_addendum.R")
+source("./scripts/theme_addendum.R")
+source("./scripts/BorderMan.R")
+source("./scripts/01-preprocessing.R")
+cat(getwd())
+options(scipen=999)
+
+```
+
+
+
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Österreich als Vergleichswert hinzufügen für die Bezirke je Typ/Jahr
+bezirke_mortalität_at <- filter(bezirke_mortalität, wohnbezirk=="0") %>%
+  select(-c(wohnbezirk, bezirkname))%>%
+  rename(rate_at = rate)
+
+# Renaming
+bezirke_mortalität <- bezirke_mortalität %>%
+  mutate(todesursache_kurz = ifelse(todesursache == "Bösartige Neubildungen", "alle Krebsarten", 
+                                ifelse(todesursache == "Bösart. Neubild. des Magens", "Magen", 
+                                       ifelse(todesursache == "Bösart. Neubild. des Colon, des Rektums und des Anus", "Darm", 
+                                              ifelse(todesursache == "Bösart. Neubild. der Bauchspeicheldrüse", "Bauchspeicheldrüse", 
+                                                            ifelse(todesursache == "Bösart. Neubild. der Luftröhre, Bronchien und Lunge", "Lunge", 
+                                                                   ifelse(todesursache == "Bösart. Neubild. der Brustdrüse", "Brust", 
+                                                                          ifelse(todesursache == "Bösart. Neubild. des Ovariums", "Eierstock", 
+                                                                                 ifelse(todesursache == "Bösart. Neubild. der Prostata", "Prostata", 
+                                                                                        ifelse(todesursache == "Leukämie", "Leukämie", 
+                                                                                 
+                                       "alle anderen")))))))))) 
+
+# Bezirke für Recherche herausrechnen
+bezirke_mortalität_vgl <- bezirke_mortalität %>%
+  left_join(bezirke_mortalität_at, by=c("periode"="periode", "todesursache"="todesursache", "group"="group")) %>%
+  mutate(diff_rate = rate-rate_at)  
+write.xlsx(as.data.frame(bezirke_mortalität_vgl), file="output/ignore/bezirke_mortalität_vgl.xlsx", col.names=TRUE, row.names=FALSE, append=FALSE)
+
+writegroupcsv <- function(df) {
+  print(first(df$group))
+  
+  write_csv(df %>%
+              select(-group) %>%
+              gather(wertart, rate, rate, rate_at, diff_rate) %>%
+              mutate(todesursache_kurz = case_when(
+                todesursache_kurz=="alle Krebsarten" ~ todesursache_kurz,
+                todesursache_kurz=="Leukämie" ~ todesursache_kurz,
+                todesursache_kurz=="Bauchspeicheldrüse" ~ "Bauchspeicheldrüsenkrebs",
+                todesursache_kurz=="Lunge" ~ "Lungenkrebs",
+                TRUE ~ paste0(todesursache_kurz, "krebs")
+              )) %>%
+              mutate(key=paste(todesursache_kurz, wertart, sep=":")) %>%
+              select(-todesursache_kurz, -wertart, -todesursache, -periode) %>%
+              rename(gkz=wohnbezirk) %>%
+              spread(key, rate),
+            path=paste0("interaktiv/karten/dist/",first(df$group),".csv"))
+  df
+}
+
+bezirke_mortalität_vgl_akt <- bezirke_mortalität_vgl %>%
+  filter(periode=="2007-2015") %>%
+  mutate(group=gsub("_.*$","",group))
+
+bezirke_mortalität_vgl_akt %>%
+  group_by(group) %>%
+  do(writegroupcsv(.))
+
+# Herausschreiben aller Daten für die interaktive Map
+write_csv(bezirke_mortalität_vgl_akt, path="interaktiv/karten/bezirke_mortalität_vgl_akt.csv")
+
+
+bezirke_mortalität_vgl_akt_map <- bezirke_mortalität_vgl_akt %>%
+  filter(wohnbezirk != 0 & group =="gesamt_altersstandardisierte_rate" & todesursache_kurz=="Lunge")
+
+bezirke_mortalität_vgl_akt_map <- bezirke_mortalität_vgl_akt_map %>% left_join(bez_18_mw, by = c("wohnbezirk" = "GKZ")) 
+
+
+# visualisierung der abweichung vom bundesweiten Schnitt
+plot_6 <- ggplot() +
+  # municipality polygons & outline
+  geom_sf(data = bezirke_mortalität_vgl_akt_map, aes(fill=diff_rate), color="white", size=0.001) +
+  geom_sf(data = bundeslaendergrenzen, color="black", fill="transparent", size=0.2) +
+  coord_sf() +
+  #coord_map(projection = "mercator") +
+  # coord_sf did not work here
+  #scale_fill_gradient(low = "#ffffff", high = "#132B43",
+  #                     space = "Lab", na.value = "#af3b6e", guide = "colourbar") +
+  scale_fill_gradient2(low = "#84a07c", midpoint = 0, mid = "#f0edf1", high = "#ba2b58")+
+  #facet_wrap(~ todesursache)+
+  labs(x = NULL, y = NULL, title = "Krebs", caption = "Quelle: Statistik Austria, BEV.") +
+  #guides(fill=guide_legend(nrow=6,byrow=TRUE)) +
+ theme_bw()
+print(plot_6)
+ggsave("output/ignore/plot_6.pdf", device="pdf")
+
+  
+bezirke_mortalität_vgl_quant <- bezirke_mortalität_vgl %>%
+  # select(-c(rate, rate_at)) %>%
+  # mutate(periode_todesursache_group = paste(periode, todesursache, group, sep="$")) %>%
+  # select(wohnbezirk, bezirkname, periode_todesursache_group, diff_rate)%>%
+  # spread(periode_todesursache_group, diff_rate)
+  group_by(periode, wohnbezirk, todesursache, bezirkname, group) %>%
+  na.omit() %>% 
+   do(data.frame(t(quantile(.$rate))))
+
+  
+# für alle Krebstypen das letzte jahr visualisieren
+bezirke_mortalität_map <- bezirke_mortalität %>%
+  filter(wohnbezirk != 0 & periode =="2007-2015" & group =="gesamt_altersstandardisierte_rate" & todesursache=="Bösartige Neubildungen")
+  
+# merge für vis
+map_data <- bezirke_mortalität_map %>% left_join(bez_18_mw, by = c("wohnbezirk" = "GKZ")) 
+needs(sf)
+# vis
+plot_1 <- ggplot() +
+  # municipality polygons & outline
+  geom_sf(data = map_data, aes(fill=rate), color="white", size=0.001) +
+  geom_sf(data = bundeslaendergrenzen, color="black", fill="transparent", size=0.1) +
+  coord_sf() +
+  #coord_map(projection = "mercator") +
+  # coord_sf did not work here
+  scale_fill_gradient(low = "#ffffff", high = "#132B43",
+                       space = "Lab", na.value = "#af3b6e", guide = "colourbar") +
+  facet_wrap(~ todesursache)+
+  #is_free()+
+  labs(x = NULL, y = NULL, title = "Krebs", caption = "Quelle: Statistik Austria, BEV.") +
+  guides(fill=guide_legend(nrow=6,byrow=TRUE)) 
+print(plot_1)
+
+```
+
+
+```{r}
+
+# Gibt es Bezirken, in denen sich die Rate negativ entwickelt?
+bezirke_mortalität_trend <- bezirke_mortalität %>%
+  spread(periode, rate)
+  
+needs(forecast)
+bezirke_mortalität_trend$trend <- NA
+bezirke_mortalität_trend$pvalue <- NA
+for (i in 1:nrow(bezirke_mortalität_trend)){
+  
+  werte <- as.ts(as.vector(t(bezirke_mortalität_trend[i,][5:8])))
+  fit <- tslm(werte~trend)
+  trend <- fit$coefficients[2]
+  pvalue <- summary(fit)$coefficients[2,4]
+  
+  bezirke_mortalität_trend$trend[i] <- trend
+  bezirke_mortalität_trend$pvalue[i] <- pvalue
+  
+  cat(trend)
+  cat(pvalue)
+  
+  
+}
+bezirke_mortalität_trend$sig <- NA  
+bezirke_mortalität_trend$sig[bezirke_mortalität_trend$pvalue<=0.1] <- "Signifikant 5%"
+bezirke_mortalität_trend$sig[bezirke_mortalität_trend$pvalue> 0.1] <- "Insignifikant 5%"
+bezirke_mortalität_trend$posneg[bezirke_mortalität_trend$trend >= 0] <- "negativ"
+bezirke_mortalität_trend$posneg[bezirke_mortalität_trend$trend <= 0] <- "positiv"
+
+
+
+
+
+```
+
+```{r}
+# In wie vielen Bezirken je Bundesland liegt die Krebsmortalitätsrate über dem Bundesschnitt je Krebsart?
+# LIne Chart je Krebsart je Bundesland für Entwicklung je group
+
+# Berechnen für Oberösterreich
+bezirke_mortalität_vgl_chart <- bezirke_mortalität_vgl %>%
+  filter(group=="gesamt_altersstandardisierte_rate") %>%
+  mutate(blcode = substr(wohnbezirk, 0, 1)) %>%
+  filter(blcode==4 | blcode ==0)
+
+plot_3 <- ggplot(bezirke_mortalität_vgl_chart, aes(x=periode, group = rev(bezirkname))) +
+                   geom_line(aes(y=rate, colour=blcode), size=0.5) +
+  facet_wrap(~todesursache, scales = "free") +
+  scale_colour_manual(values=c("#C1839F", "#cecece"))+
+  theme_bw()
+                 
+print(plot_3)
+add_save(plot_3 + labs(title=NULL, caption=NULL),'plot_3')
+#ggsave(plot_3, "output/plot_3.pdf")
+```
+
+```{r}
+# Wie viele Bezirke je Bundesland sind über/unterdurchschnittlich viele Krebstote nach Typ und Rate, um zu eruieren, ob es interessante Ansätze gibt 
+mortalität_yearly_tidy <- mortalität_yearly %>%
+         gather(group, rate, insgesamt_absolut:frauen_kumrate)%>%
+         separate(group, into = c("group", "valuetype"), sep="_") %>%
+         na.omit()%>%
+         mutate(rate = as.numeric(rate))
+
+mortalität_yearly_tidy_rate <- mortalität_yearly_tidy %>% 
+  filter(valuetype=="kumrate" & typ!="Gesamt")
+
+plot_4 <- ggplot(mortalität_yearly_tidy_rate, aes(x=jahr, group = rev(typ))) +
+                   geom_line(aes(y=rate), size=0.5) +
+  facet_wrap(~group, scales = "free") +
+  theme_bw()
+print(plot_4)
+```
+
+```{r}
+# Dataframe für INteractive zimmern
+# 1. Step: Overall ############ praevalenz_gesamt_pct u. praevalenz_gesamt_absolut
+# 2. Prävalenz ############  krebsarten_alter_pct, krebsarten_alter_absolut
+# 3. Am häfuisten wird X festgesellt . Y prozent aller Diagnosen  ############ krebsarten_alter_pct_rel
+#4. Zwischen X-Y Porzent überleben die nächsten 5 jahren - ueberleben_alter
+# 5. Die Chance schwankt je nach Zeitpunkt der Feststellung - ueberleben_stadium
+# 6. Für X in Ihrer Lebensphase hat sich die Überlebenswahrscheinlichkeit (verbessert/verschlechtert) ueberleben, ueberleben_alter
+
+# Generate one datafile for alle cancer types
+praevalenz_gesamt_pct_df <- praevalenz_gesamt_pct %>% mutate(typ = "rel")
+praevalenz_gesamt_absolut_df <- praevalenz_gesamt_absolut %>% na.omit() %>% mutate(typ="abs")
+
+krebsarten_alter_pct_df <- krebsarten_alter_pct %>% 
+  mutate(lokalisation = gsub("Malignome, insgesamt \\(C00-C97, ohne C44\\)", "C99 alle-Krebsarten", lokalisation),
+         typ="rel") %>% 
+  separate(lokalisation, c("cs", "lokalisation"), sep = " ") %>% 
+  na.omit(cancertype) %>% 
+  select(-cs)
+
+
+krebsarten_alter_absolut_df <- krebsarten_alter_absolut %>%
+  mutate(lokalisation = gsub("Malignome, insgesamt \\(C00-C97, ohne C44\\)", "C99 alle-Krebsarten", lokalisation), 
+         typ="abs") %>%
+  separate(lokalisation, c("cs", "lokalisation"), sep = " ") %>% 
+  na.omit(cancertype) %>% 
+  select(-cs)
+
+krebsarten_df <- bind_rows(praevalenz_gesamt_absolut_df, praevalenz_gesamt_pct_df, krebsarten_alter_absolut_df, krebsarten_alter_pct_df) %>%
+  mutate(lokalisation = gsub("Gebärmutterkörper", "Gebärmutter", lokalisation)) %>%
+  filter(lokalisation!="Gebärmutterhals")
+
+write_csv(krebsarten_df, path = "interaktiv/krebsarten_df.csv")
+
+# Generate one datafile for alle survival rates
+ueberleben_alter_df <- ueberleben_alter %>% 
+   separate(kre_icd10_3, c("cs", "lokalisation"), sep = ", ") %>% 
+  mutate(lokalisation = gsub("Malignome", "alle-Krebsarten", lokalisation),
+         typ="rel", 
+         category = kre_altgrob) %>% 
+  na.omit(lokalisation) %>% 
+  select(-c(cs, interval, rateabove95pct, ratebelow95pct, kre_altgrob))
+
+ueberleben_stadium_df <- ueberleben_stadium %>%
+   separate(kre_icd10_3, c("cs", "lokalisation"), sep = ", ") %>% 
+  mutate(lokalisation = gsub("Malignome", "alle-Krebsarten", lokalisation),
+         typ="rel", 
+         category = kre_stdgrob) %>% 
+  na.omit(lokalisation) %>% 
+  select(-c(cs, interval, rateabove95pct, ratebelow95pct, kre_stdgrob))
+
+ueberleben_df <- bind_rows(ueberleben_stadium_df, ueberleben_alter_df)  
+
+# Gebärmutterhals entfernen, weil nur eine Art von Gebärmutterkrebs angezeigt wird
+ueberleben_df <- ueberleben_df %>%
+  mutate(lokalisation = gsub("Colorectal", "Darm", lokalisation), 
+         lokalisation = gsub("Gebärmutterkörper", "Gebärmutter", lokalisation)) %>%
+  filter(lokalisation!="Gebärmutterhals")
+
+# Herausschreiben der Daten für die personalisierte Grafik zum Überleben
+write_csv(ueberleben_df, path = "interaktiv/ueberleben_df.csv")
+
+
+```
+
+## Linting
+
+The code in this RMarkdown is listed with the [lintr package](https://github.com/jimhester/lintr), which is based on the  [tidyverse style guide](http://style.tidyverse.org/). 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+lintr::lint("main.Rmd")
+# if you have additional scripts and want them to be linted too, add them here
+```
+
+

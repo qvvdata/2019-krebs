@@ -1,0 +1,61 @@
+<html>
+<head>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Cancer Vizualisation</title>
+
+    <link rel="stylesheet" href="./dist/normalize.css" />
+    <link rel="stylesheet" href="./dist/index.css" />
+
+    <style>
+        #controls {
+            position: fixed;
+            right: 10px;
+            top: 10px;
+            z-index: 1000000;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <button class="cancer-btn" data-cancer-type="Brust">Breast</button>
+        <button class="cancer-btn" data-cancer-type="Lunge">Lungs</button>
+        <button class="cancer-btn" data-cancer-type="Leber">Liver</button>
+    </div>
+
+    <div id="chart-holder"></div>
+<script type="module">
+import './dist/CancerVizualisation.js';
+
+let qualityLevel = 70;
+// Reduce quality level for smartphones.
+if (window.innerWidth < 1024) {
+    qualityLevel = 50;
+}
+
+const settings = {
+    lang: 'de'
+};
+
+const mlcvSettings = {
+    debug: false,
+    showGizmos: false,
+    performanceMonitoring: false,
+    qualityLevel: qualityLevel
+};
+const viz = new CancerVizualisation(
+    document, '#chart-holder', settings, mlcvSettings
+);
+viz.init();
+
+console.log(viz);
+
+document.querySelectorAll('.cancer-btn').forEach(el => {
+    el.addEventListener('click', () => {
+        const cancerType = el.getAttribute('data-cancer-type');
+        viz.startStory('cancerType', cancerType);
+    });
+});
+</script>
+</body>
+</html>

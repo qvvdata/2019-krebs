@@ -1,0 +1,32 @@
+# QVV Map Template
+
+Copy this in your project to make maps without too much code duplication!
+
+# Just add data
+
+Add your utf-8-encoded CSV files with a `gkz` or `gkz_neu` column to the `dist` folder.
+Add custom topojson files with `GKZ` property to `dist` as well.
+Add the map definition to `data.js`, pick your scale/legend style at https://github.com/qvvdata/qvv-map-library/blob/master/src/legend.js.
+
+
+
+Dev sever:
+`npm run dev`
+(Install dependencies first using `npm install`, of course.)
+
+*The browser window will be empty*, since the app expects the `map` GET parameter to be present and for it to be a key present in `data.js`.
+
+Build:
+`npm run build`
+
+# GET parameters
+
+For a list of GET params, refer to the doc at https://github.com/qvvdata/qvv-map-library/
+
+# Embedding
+
+Deploy the code, open it in browser (w/ `map` param), then
+`copy(getEmbed())` in console.
+
+# Development
+Want to use your local version of `qvv-map-template` (the library this depends on) as a dependency? Run `npm link` in the qvv-map-template folder, and `npm link qvv-map-library` here (after `npm install`).

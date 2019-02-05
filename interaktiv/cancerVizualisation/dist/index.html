@@ -1,0 +1,43 @@
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Krebs</title>
+
+    <link rel="stylesheet" href="./normalize.css" />
+    <link rel="stylesheet" href="./index.css" />
+
+    <script src="./CancerVizualisation.min.js"></script>
+</head>
+<body>
+    <div id="chart-holder"></div>
+
+<script type="module">
+let qualityLevel = 70;
+// Reduce quality level for smaller screens.
+if (window.innerWidth < 1024) {
+    qualityLevel = 50;
+}
+
+const settings = {
+    lang: 'de'
+};
+
+const mlcvSettings = {
+    debug: false,
+    showGizmos: false,
+    performanceMonitoring: false,
+    qualityLevel: qualityLevel
+};
+
+const viz = new CancerVizualisation(
+    document, '#chart-holder', settings, mlcvSettings
+);
+
+viz.init();
+
+console.log(viz);
+</script>
+</body>
+</html>
